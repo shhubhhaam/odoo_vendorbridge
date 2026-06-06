@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import Btn from "../../components/common/Button";
+import { Field, Input } from "../../components/common/Field";
 
 function Login({ onLogin, onRegister }) {
   const [email, setEmail] = useState("admin@vendorbridge.com");
   const [pass, setPass] = useState("password");
-  const [show, setShow] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-700 to-blue-900 items-center justify-center p-12 relative overflow-hidden">
@@ -45,8 +48,15 @@ function Login({ onLogin, onRegister }) {
             </Field>
             <Field label="Password" required>
               <div className="relative">
-                <Input type={show ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" />
-                <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">{show ? "Hide" : "Show"}</button>
+                <Input type={showPass ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label={showPass ? "Hide password" : "Show password"}
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </Field>
             <div className="flex justify-end">

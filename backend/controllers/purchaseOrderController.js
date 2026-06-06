@@ -1,12 +1,23 @@
 const PurchaseOrder = require("../models/PurchaseOrder");
+const Vendor = require("../models/Vendor");
 const Activity = require("../models/Activity");
 
 let poCounter = 1;
 
 exports.getAllPOs = async (req, res) => {
   try {
-    const pos = await PurchaseOrder.find()
-      .populate("vendor", "name")
+    let query = {};
+    if (req.user && req.user.role === "Vendor") {
+      const vendor = await Vendor.findOne({ email: req.user.email });
+      if (vendor) {
+        query = { vendor: vendor._id };
+      } else {
+        return res.status(200).json({ success: true, pos: [] });
+      }
+    }
+
+    const pos = await PurchaseOrder.find(query)
+      .populate("vendor", "name email")
       .populate("quotation")
       .populate("createdBy", "firstName lastName");
 

@@ -3,16 +3,37 @@ import { authAPI } from "../services/api";
 
 export const AuthContext = createContext();
 
+/**
+ * FIX 26: isAuthenticated was computed as `!!token` — meaning a stale,
+ *          expired, or tampered token kept isAuthenticated = true until
+ *          the first API call failed.
+ *          Now isAuthenticated is derived from whether `user` is non-null
+ *          (set only after the server verifies the token via /auth/me).
+ *
+ * FIX 27: verifyToken errors (expired token) silently cleared the token
+ *          but left `loading = false` with `user = null`. Any component
+ *          checking isAuthenticated during the loading phase could render
+ *          protected UI briefly. Added `isReady` flag to gate rendering
+ *          until verification is complete.
+ *
+ * FIX 28: Register form allowed selecting any role including "Admin".
+ *          The backend now ignores the client-submitted role, but we
+ *          align the form to only offer self-registerable roles to avoid
+ *          user confusion.
+ */
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [token, setToken] = useState(() => localStorage.getItem("token"));
   const [loading, setLoading] = useState(false);
+  const [isReady, setIsReady] = useState(false); // FIX 27
   const [error, setError] = useState(null);
 
-  // Check if user is already logged in
   useEffect(() => {
     if (token) {
       verifyToken();
+    } else {
+      setIsReady(true);
     }
   }, []);
 
@@ -22,15 +43,19 @@ export const AuthProvider = ({ children }) => {
       const response = await authAPI.getMe();
       setUser(response.data.user);
     } catch (err) {
+      // Token is invalid or expired — clean up
       localStorage.removeItem("token");
       setToken(null);
       setUser(null);
     } finally {
       setLoading(false);
+      setIsReady(true); // FIX 27: signal that auth check is complete
     }
   };
 
-  const register = async (firstName, lastName, email, password, phone, role, country) => {
+  const register = async (firstName, lastName, email, password, phone, country) => {
+    // FIX 28: role removed from register params — backend always assigns
+    //          "Procurement Officer" for self-registration
     try {
       setLoading(true);
       setError(null);
@@ -40,8 +65,8 @@ export const AuthProvider = ({ children }) => {
         email,
         password,
         phone,
-        role,
         country,
+        // NOTE: `role` intentionally omitted — backend enforces "Procurement Officer"
       });
       const { token: newToken, user: newUser } = response.data;
       localStorage.setItem("token", newToken);
@@ -87,12 +112,16 @@ export const AuthProvider = ({ children }) => {
     user,
     token,
     loading,
+    isReady,   // FIX 27: expose to AppContent for proper load gating
     error,
     register,
     login,
     logout,
-    isAuthenticated: !!token,
+    // FIX 26: isAuthenticated derived from `user`, not `token`
+    isAuthenticated: !!user,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  );
 };

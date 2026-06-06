@@ -1,13 +1,34 @@
 const Invoice = require("../models/Invoice");
+const Vendor = require("../models/Vendor");
 const Activity = require("../models/Activity");
 
 let invoiceCounter = 1;
 
+/**
+ * FIX 24: getInvoice (single) had no ownership check for Vendors.
+ *          Any Vendor user could read any invoice by ID.
+ *          Now Vendors are scoped to their own vendor profile's invoices.
+ *
+ * FIX 25: payInvoice — Vendor role removed at the route level.
+ *          Belt-and-suspenders: added a role check here too so the
+ *          controller is safe even if routes are misconfigured.
+ */
+
 exports.getAllInvoices = async (req, res) => {
   try {
-    const invoices = await Invoice.find()
+    let query = {};
+
+    if (req.user.role === "Vendor") {
+      const vendor = await Vendor.findOne({ email: req.user.email });
+      if (!vendor) {
+        return res.status(200).json({ success: true, invoices: [] });
+      }
+      query = { vendor: vendor._id };
+    }
+
+    const invoices = await Invoice.find(query)
       .populate("po", "poId amount")
-      .populate("vendor", "name")
+      .populate("vendor", "name email")
       .populate("createdBy", "firstName lastName");
 
     res.status(200).json({ success: true, invoices });
@@ -24,7 +45,19 @@ exports.getInvoice = async (req, res) => {
       .populate("createdBy", "firstName lastName");
 
     if (!invoice) {
-      return res.status(404).json({ success: false, message: "Invoice not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    }
+
+    // FIX 24: Vendors may only view invoices belonging to their vendor profile
+    if (req.user.role === "Vendor") {
+      const vendor = await Vendor.findOne({ email: req.user.email });
+      if (!vendor || !invoice.vendor._id.equals(vendor._id)) {
+        return res
+          .status(403)
+          .json({ success: false, message: "Access denied" });
+      }
     }
 
     res.status(200).json({ success: true, invoice });
@@ -38,7 +71,10 @@ exports.createInvoice = async (req, res) => {
     const { po, vendor, amount, due } = req.body;
 
     if (!po || !vendor || !amount || !due) {
-      return res.status(400).json({ success: false, message: "Please provide all required fields" });
+      return res.status(400).json({
+        success: false,
+        message: "po, vendor, amount, and due are required",
+      });
     }
 
     const invoiceId = `INV-${new Date().getFullYear()}-${String(invoiceCounter).padStart(4, "0")}`;
@@ -50,11 +86,11 @@ exports.createInvoice = async (req, res) => {
       vendor,
       amount,
       due,
-      createdBy: req.user.id,
+      createdBy: req.user._id,
     });
 
     await Activity.create({
-      user: req.user.id,
+      user: req.user._id,
       action: `Created Invoice ${invoiceId}`,
       type: "Invoice",
       referenceId: invoice._id,
@@ -69,10 +105,26 @@ exports.createInvoice = async (req, res) => {
 
 exports.payInvoice = async (req, res) => {
   try {
-    let invoice = await Invoice.findById(req.params.id);
+    // FIX 25: Belt-and-suspenders role guard
+    if (req.user.role === "Vendor") {
+      return res.status(403).json({
+        success: false,
+        message: "Vendors cannot mark invoices as paid",
+      });
+    }
+
+    const invoice = await Invoice.findById(req.params.id);
 
     if (!invoice) {
-      return res.status(404).json({ success: false, message: "Invoice not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
+    }
+
+    if (invoice.status === "Paid") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invoice is already marked as Paid" });
     }
 
     invoice.status = "Paid";
@@ -80,7 +132,7 @@ exports.payInvoice = async (req, res) => {
     await invoice.save();
 
     await Activity.create({
-      user: req.user.id,
+      user: req.user._id,
       action: `Marked Invoice ${invoice.invoiceId} as Paid`,
       type: "Invoice",
       referenceId: invoice._id,
@@ -98,7 +150,9 @@ exports.deleteInvoice = async (req, res) => {
     const invoice = await Invoice.findByIdAndDelete(req.params.id);
 
     if (!invoice) {
-      return res.status(404).json({ success: false, message: "Invoice not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Invoice not found" });
     }
 
     res.status(200).json({ success: true, message: "Invoice deleted" });

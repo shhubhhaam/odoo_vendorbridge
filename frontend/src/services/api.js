@@ -36,6 +36,8 @@ export const rfqAPI = {
   create: (data) => api.post("/rfqs", data),
   update: (id, data) => api.put(`/rfqs/${id}`, data),
   publish: (id) => api.put(`/rfqs/${id}/publish`, {}),
+  submitQuotation: (rfqId, data) => api.post(`/rfqs/${rfqId}/quotations`, data),
+  getQuotations: (rfqId) => api.get(`/rfqs/${rfqId}/quotations`),
   delete: (id) => api.delete(`/rfqs/${id}`),
 };
 
@@ -63,6 +65,13 @@ export const invoiceAPI = {
 export const activityAPI = {
   getAll: () => api.get("/activities"),
   getByType: (type) => api.get(`/activities/type/${type}`),
+};
+
+// Users API
+export const userAPI = {
+  getAll: () => api.get("/users"),
+  getById: (id) => api.get(`/users/${id}`),
+  delete: (id) => api.delete(`/users/${id}`),
 };
 
 export default api;

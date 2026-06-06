@@ -1,6 +1,7 @@
 import { useState, useRef, useContext, useEffect } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { AuthContext, AuthProvider } from "./context/AuthContext";
-import { vendorAPI, rfqAPI, poAPI, invoiceAPI, activityAPI } from "./services/api";
+import { vendorAPI, rfqAPI, poAPI, invoiceAPI, activityAPI, userAPI } from "./services/api";
 
 // ─── UTILITIES ────────────────────────────────────────────────────────────────
 const fmt = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
@@ -178,17 +179,23 @@ function Table({ cols, rows, actions }) {
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
-  { id: "dashboard", label: "Dashboard", icon: "⊞" },
-  { id: "vendors", label: "Vendors", icon: "🏢" },
-  { id: "rfqs", label: "RFQs", icon: "📋" },
-  { id: "quotations", label: "Quotations", icon: "💬" },
-  { id: "approvals", label: "Approvals", icon: "✓" },
-  { id: "purchase-orders", label: "Purchase Orders", icon: "📦" },
-  { id: "activity-logs", label: "Activity Logs", icon: "🕐" },
+  { id: "dashboard", label: "Dashboard", icon: "⊞", roles: ["Admin", "Procurement Officer", "Manager / Approver"] },
+  { id: "vendors", label: "Vendors", icon: "🏢", roles: ["Admin"] },
+  { id: "rfqs", label: "RFQs", icon: "📋", roles: ["Admin", "Procurement Officer", "Vendor"] },
+  { id: "quotations", label: "Quotations", icon: "💬", roles: ["Admin", "Procurement Officer"] },
+  { id: "approvals", label: "Approvals", icon: "✓", roles: ["Admin", "Manager / Approver"] },
+  { id: "purchase-orders", label: "Purchase Orders", icon: "📦", roles: ["Admin", "Procurement Officer", "Vendor"] },
+  { id: "activity-logs", label: "Activity Logs", icon: "🕐", roles: ["Admin", "Manager / Approver"] },
+  { id: "users", label: "Users", icon: "👥", roles: ["Admin"] },
 ];
 
 function Sidebar({ active, onNav }) {
   const { user, logout } = useContext(AuthContext);
+  
+  const filteredNavItems = NAV_ITEMS.filter(item => 
+    !item.roles || (user && item.roles.includes(user.role))
+  );
+
   return (
     <aside className="fixed left-0 top-0 h-full w-56 bg-gray-900 flex flex-col z-30">
       <div className="px-5 py-5 border-b border-gray-800">
@@ -201,7 +208,7 @@ function Sidebar({ active, onNav }) {
         </div>
       </div>
       <nav className="flex-1 py-4 overflow-y-auto">
-        {NAV_ITEMS.map(item => (
+        {filteredNavItems.map(item => (
           <button key={item.id} onClick={() => onNav(item.id)}
             className={`w-full flex items-center gap-3 px-5 py-2.5 text-sm transition-colors ${active === item.id ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}>
             <span className="text-base">{item.icon}</span>
@@ -291,7 +298,7 @@ function Btn({ children, variant = "primary", size = "sm", onClick, className = 
 function LoginPage({ onRegister }) {
   const [email, setEmail] = useState("admin@vendorbridge.com");
   const [pass, setPass] = useState("password");
-  const [show, setShow] = useState(false);
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { login } = useContext(AuthContext);
@@ -342,8 +349,15 @@ function LoginPage({ onRegister }) {
             </Field>
             <Field label="Password" required>
               <div className="relative">
-                <Input type={show ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" />
-                <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">{show ? "Hide" : "Show"}</button>
+                <Input type={showPass ? "text" : "password"} value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••••" />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label={showPass ? "Hide password" : "Show password"}
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </Field>
             <Btn size="lg" onClick={handleLogin} disabled={loading} className="w-full justify-center">{loading ? "Signing in..." : "Sign In to VendorBridge"}</Btn>
@@ -359,7 +373,8 @@ function LoginPage({ onRegister }) {
 // REGISTRATION SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 function RegisterPage({ onBack }) {
-  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", password: "", phone: "", role: "Procurement Manager", country: "India" });
+  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", password: "", phone: "", role: "Procurement Officer", country: "India" });
+  const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { register } = useContext(AuthContext);
@@ -389,14 +404,26 @@ function RegisterPage({ onBack }) {
             <Field label="First Name" required><Input placeholder="Rajesh" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} /></Field>
             <Field label="Last Name" required><Input placeholder="Gupta" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} /></Field>
             <Field label="Email Address" required><Input type="email" placeholder="rajesh@company.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} /></Field>
-            <Field label="Password" required><Input type="password" placeholder="••••••••" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} /></Field>
+            <Field label="Password" required>
+              <div className="relative">
+                <Input type={showPass ? "text" : "password"} placeholder="••••••••" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label={showPass ? "Hide password" : "Show password"}
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
             <Field label="Phone Number"><Input type="tel" placeholder="+91 98765 43210" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} /></Field>
             <Field label="Role" required>
               <Select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })}>
-                <option>Procurement Manager</option>
-                <option>Finance Head</option>
-                <option>Operations Director</option>
-                <option>Vendor Manager</option>
+                <option>Procurement Officer</option>
+                <option>Vendor</option>
+                <option>Manager / Approver</option>
+                <option>Admin</option>
               </Select>
             </Field>
             <div className="col-span-2">
@@ -518,6 +545,17 @@ function VendorManagement() {
   const [viewVendor, setViewVendor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({ name: "", category: "", gst: "", email: "", phone: "", contact: "", address: "", city: "", status: "Active" });
+  const { user } = useContext(AuthContext);
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this vendor?")) return;
+    try {
+      await vendorAPI.delete(id);
+      fetchVendors();
+    } catch (error) {
+      alert("Error deleting vendor: " + (error.response?.data?.message || error.message));
+    }
+  };
 
   useEffect(() => {
     fetchVendors();
@@ -556,7 +594,7 @@ function VendorManagement() {
   return (
     <PageWrapper>
       <PageHeader title="Vendor Management" sub={`${vendors.length} registered vendors`}
-        actions={<Btn onClick={() => setAddModal(true)}>+ Add Vendor</Btn>} />
+        actions={user?.role === "Admin" ? <Btn onClick={() => setAddModal(true)}>+ Add Vendor</Btn> : null} />
       <Card className="mb-4">
         <div className="p-4 flex flex-wrap gap-3 border-b border-gray-100">
           <div className="flex-1 min-w-48"><SearchBar value={search} onChange={setSearch} placeholder="Search vendors…" /></div>
@@ -588,7 +626,7 @@ function VendorManagement() {
           actions={row => (
             <div className="flex gap-1 justify-end">
               <Btn variant="ghost" size="sm" onClick={() => setViewVendor(row)}>View</Btn>
-              <Btn variant="danger" size="sm">Del</Btn>
+              {user?.role === "Admin" && <Btn variant="danger" size="sm" onClick={() => handleDelete(row._id)}>Del</Btn>}
             </div>
           )}
         />
@@ -613,6 +651,8 @@ function VendorManagement() {
           <Btn onClick={handleAddVendor}>Save Vendor</Btn>
         </div>
       </Modal>
+
+
 
       <Modal open={!!viewVendor} onClose={() => setViewVendor(null)} title="Vendor Details">
         {viewVendor && (
@@ -641,14 +681,74 @@ function VendorManagement() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// USERS MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+function UsersManagement() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const { user } = useContext(AuthContext);
+
+  useEffect(() => { fetchUsers(); }, []);
+
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const res = await userAPI.getAll();
+      setUsers(res.data.users || []);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+    } finally { setLoading(false); }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this user?")) return;
+    try {
+      await userAPI.delete(id);
+      fetchUsers();
+      alert("User deleted");
+    } catch (error) {
+      alert("Error deleting user: " + (error.response?.data?.message || error.message));
+    }
+  };
+
+  return (
+    <PageWrapper>
+      <PageHeader title="User Management" sub={`${users.length} registered users`} />
+      <Card>
+        <Table
+          cols={[
+            { key: "name", label: "Name", render: u => `${u.firstName} ${u.lastName}` },
+            { key: "email", label: "Email" },
+            { key: "role", label: "Role" },
+            { key: "isActive", label: "Active", render: u => u.isActive ? "Yes" : "No" },
+            { key: "createdAt", label: "Created", render: u => new Date(u.createdAt).toLocaleDateString() },
+          ]}
+          rows={users}
+          actions={row => (
+            <div className="flex gap-1 justify-end">
+              {user?.role === "Admin" && <Btn variant="danger" size="sm" onClick={() => handleDelete(row._id)}>Delete</Btn>}
+            </div>
+          )}
+        />
+      </Card>
+    </PageWrapper>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // RFQ PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
 function RFQPage() {
   const [rfqs, setRfqs] = useState([]);
+  const { user } = useContext(AuthContext);
+  const canManageRFQ = user && ["Procurement Officer", "Admin", "Manager / Approver"].includes(user.role);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All Status");
   const [loading, setLoading] = useState(true);
   const [createModal, setCreateModal] = useState(false);
+  const [quoteModal, setQuoteModal] = useState(false);
+  const [quoteForm, setQuoteForm] = useState({ subtotal: "", gst: 18, delivery: 7, paymentTerms: "", notes: "" });
+  const [activeRfqForQuote, setActiveRfqForQuote] = useState(null);
   const [formData, setFormData] = useState({ title: "", category: "", description: "", deadline: "", vendors: [] });
 
   useEffect(() => {
@@ -679,6 +779,32 @@ function RFQPage() {
     }
   };
 
+  const openQuoteModal = (rfq) => {
+    setActiveRfqForQuote(rfq);
+    setQuoteForm({ subtotal: "", gst: 18, delivery: 7, paymentTerms: "", notes: "" });
+    setQuoteModal(true);
+  };
+
+  const handleSubmitQuote = async () => {
+    if (!activeRfqForQuote) return;
+    try {
+      const payload = {
+        subtotal: Number(quoteForm.subtotal),
+        gst: Number(quoteForm.gst),
+        delivery: Number(quoteForm.delivery),
+        paymentTerms: quoteForm.paymentTerms,
+        notes: quoteForm.notes,
+      };
+      await rfqAPI.submitQuotation(activeRfqForQuote._id, payload);
+      setQuoteModal(false);
+      setActiveRfqForQuote(null);
+      fetchRFQs();
+      alert("Quotation submitted successfully");
+    } catch (error) {
+      alert("Error submitting quotation: " + (error.response?.data?.message || error.message));
+    }
+  };
+
   const handlePublish = async (rfqId) => {
     try {
       await rfqAPI.publish(rfqId);
@@ -697,7 +823,7 @@ function RFQPage() {
   return (
     <PageWrapper>
       <PageHeader title="Request for Quotations" sub={`${rfqs.length} total RFQs`}
-        actions={<Btn onClick={() => setCreateModal(true)}>+ Create RFQ</Btn>} />
+        actions={canManageRFQ ? <Btn onClick={() => setCreateModal(true)}>+ Create RFQ</Btn> : null} />
       <Card className="mb-4">
         <div className="p-4 flex gap-3 border-b border-gray-100">
           <div className="flex-1"><SearchBar value={search} onChange={setSearch} placeholder="Search RFQs…" /></div>
@@ -715,11 +841,11 @@ function RFQPage() {
             { key: "status", label: "Status", render: r => <StatusBadge status={r.status} /> },
           ]}
           rows={filtered}
-          actions={row => row.status === "Draft" ? (
-            <Btn variant="primary" size="sm" onClick={() => handlePublish(row._id)}>Publish</Btn>
-          ) : (
-            <Btn variant="ghost" size="sm">View Quotes</Btn>
-          )}
+          actions={row => {
+            if (row.status === "Draft") return canManageRFQ ? <Btn variant="primary" size="sm" onClick={() => handlePublish(row._id)}>Publish</Btn> : null;
+            if (user?.role === "Vendor") return <Btn variant="primary" size="sm" onClick={() => openQuoteModal(row)}>Submit Quote</Btn>;
+            return <Btn variant="ghost" size="sm">View Quotes</Btn>;
+          }}
         />
       </Card>
 
@@ -745,6 +871,25 @@ function RFQPage() {
           </div>
         </div>
       </Modal>
+      <Modal open={quoteModal} onClose={() => setQuoteModal(false)} title={activeRfqForQuote ? `Submit Quote - ${activeRfqForQuote.title}` : "Submit Quote"}>
+        <div className="space-y-4">
+          <Field label="Subtotal (₹)" required>
+            <Input type="number" value={quoteForm.subtotal} onChange={e => setQuoteForm({ ...quoteForm, subtotal: e.target.value })} />
+          </Field>
+          <Field label="GST (%)" required>
+            <Input type="number" value={quoteForm.gst} onChange={e => setQuoteForm({ ...quoteForm, gst: e.target.value })} />
+          </Field>
+          <Field label="Delivery (days)" required>
+            <Input type="number" value={quoteForm.delivery} onChange={e => setQuoteForm({ ...quoteForm, delivery: e.target.value })} />
+          </Field>
+          <Field label="Payment Terms"><Input value={quoteForm.paymentTerms} onChange={e => setQuoteForm({ ...quoteForm, paymentTerms: e.target.value })} /></Field>
+          <Field label="Notes"><Textarea value={quoteForm.notes} onChange={e => setQuoteForm({ ...quoteForm, notes: e.target.value })} rows={3} /></Field>
+          <div className="flex justify-end gap-2 pt-4 border-t border-gray-100">
+            <Btn variant="secondary" onClick={() => setQuoteModal(false)}>Cancel</Btn>
+            <Btn onClick={handleSubmitQuote}>Submit Quote</Btn>
+          </div>
+        </div>
+      </Modal>
     </PageWrapper>
   );
 }
@@ -755,11 +900,16 @@ function RFQPage() {
 function PurchaseOrders() {
   const [pos, setPos] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const { user } = useContext(AuthContext);
   const [tab, setTab] = useState("po");
   const [loading, setLoading] = useState(true);
   const [printInvoice, setPrintInvoice] = useState(null);
   const [emailModal, setEmailModal] = useState(false);
   const [emailData, setEmailData] = useState({ to: "", subject: "", message: "" });
+  const [remarksModal, setRemarksModal] = useState(false);
+  const [remarks, setRemarks] = useState("");
+  const [remarksAction, setRemarksAction] = useState(null);
+  const [activePo, setActivePo] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -790,6 +940,45 @@ function PurchaseOrders() {
     setEmailModal(true);
   };
 
+  const canApprove = user && ["Manager / Approver", "Admin"].includes(user.role);
+
+  const openRemarksModal = (po, action) => {
+    setActivePo(po);
+    setRemarksAction(action);
+    setRemarks("");
+    setRemarksModal(true);
+  };
+
+  const handleSubmitRemarks = async () => {
+    if (!activePo || !remarksAction) return;
+    try {
+      if (remarksAction === "approve") await poAPI.approve(activePo._id, remarks);
+      else await poAPI.reject(activePo._id, remarks);
+      setRemarksModal(false);
+      setActivePo(null);
+      fetchData();
+      alert(`PO ${remarksAction}d successfully`);
+    } catch (error) {
+      alert((error.response?.data?.message) || error.message);
+    }
+  };
+
+  const handleCreateInvoice = async (po) => {
+    try {
+      const invoiceData = {
+        po: po._id,
+        vendor: po.vendor._id,
+        amount: po.amount,
+        due: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
+      };
+      await invoiceAPI.create(invoiceData);
+      fetchData();
+      alert(`Invoice generated for PO ${po.poId}`);
+    } catch (error) {
+      alert((error.response?.data?.message) || error.message);
+    }
+  };
+
   const handleSendEmail = () => {
     alert(`Email would be sent to ${emailData.to} with subject: ${emailData.subject}`);
     setEmailModal(false);
@@ -808,6 +997,25 @@ function PurchaseOrders() {
           <div className="px-5 py-4 border-b border-gray-100">
             <h3 className="font-semibold text-gray-800 text-sm">All Purchase Orders</h3>
           </div>
+          <div className="p-4 flex gap-4">
+            <div className="px-4 py-2 bg-white rounded shadow-sm">
+              <div className="text-xs text-gray-500">Total POs</div>
+              <div className="text-lg font-bold">{pos.length}</div>
+            </div>
+            <div className="px-4 py-2 bg-white rounded shadow-sm">
+              <div className="text-xs text-gray-500">Pending</div>
+              <div className="text-lg font-bold">{pos.filter(p=>p.status==="Pending").length}</div>
+            </div>
+            <div className="px-4 py-2 bg-white rounded shadow-sm">
+              <div className="text-xs text-gray-500">Approved</div>
+              <div className="text-lg font-bold">{pos.filter(p=>p.status==="Approved").length}</div>
+            </div>
+            <div className="px-4 py-2 bg-white rounded shadow-sm">
+              <div className="text-xs text-gray-500">Rejected</div>
+              <div className="text-lg font-bold">{pos.filter(p=>p.status==="Rejected").length}</div>
+            </div>
+          </div>
+
           <Table
             cols={[
               { key: "poId", label: "PO Number", render: r => <span className="font-mono text-xs font-semibold text-blue-600">{r.poId || r._id}</span> },
@@ -818,6 +1026,20 @@ function PurchaseOrders() {
               { key: "status", label: "Status", render: r => <StatusBadge status={r.status} /> },
             ]}
             rows={pos}
+            actions={row => (
+              <div className="flex gap-1 justify-end">
+                {canApprove && row.status === "Pending" && (
+                  <>
+                    <Btn variant="ghost" size="sm" onClick={() => openRemarksModal(row, "reject")}>Reject</Btn>
+                    <Btn variant="primary" size="sm" onClick={() => openRemarksModal(row, "approve")}>Approve</Btn>
+                  </>
+                )}
+                {row.status === "Approved" && (user?.role === "Procurement Officer" || user?.role === "Admin") && (
+                  <Btn variant="success" size="sm" onClick={() => handleCreateInvoice(row)}>Gen Invoice</Btn>
+                )}
+                <Btn variant="ghost" size="sm" onClick={() => handlePrintInvoice(row)}>View</Btn>
+              </div>
+            )}
           />
         </Card>
       ) : (
@@ -956,6 +1178,7 @@ function PurchaseOrders() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function QuotationsPage({ onNav }) {
   const [rfqs, setRfqs] = useState([]);
+  const { user } = useContext(AuthContext);
   const [selectedRfq, setSelectedRfq] = useState(null);
   const [quotations, setQuotations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1117,7 +1340,9 @@ function QuotationsPage({ onNav }) {
       {selectedQuote && (
         <div className="mt-6 flex justify-end gap-2">
           <Btn variant="secondary" onClick={() => setSelectedQuote(null)}>Deselect</Btn>
-          <Btn onClick={() => setSelectModal(true)}>Convert to PO →</Btn>
+          {user && ["Procurement Officer", "Admin", "Manager / Approver"].includes(user.role) && (
+            <Btn onClick={() => setSelectModal(true)}>Convert to PO →</Btn>
+          )}
         </div>
       )}
 
@@ -1390,6 +1615,7 @@ const PAGE_TITLES = {
   approvals: "Approval Workflow",
   "purchase-orders": "Purchase Orders & Invoices",
   "activity-logs": "Activity Logs",
+  "users": "User Management",
 };
 
 function AppContent() {
@@ -1422,6 +1648,7 @@ function AppContent() {
       case "approvals": return <ApprovalsPage onNav={setPage} />;
       case "purchase-orders": return <PurchaseOrders />;
       case "activity-logs": return <ActivityLogs />;
+      case "users": return <UsersManagement />;
       default: return <Dashboard onNav={setPage} />;
     }
   };

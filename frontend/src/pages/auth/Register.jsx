@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import Btn from "../../components/common/Button";
+import { Field, Input, Select, Textarea } from "../../components/common/Field";
 
 function Register({ onBack }) {
   const [avatar, setAvatar] = useState(null);
+  const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [role, setRole] = useState("Procurement Officer");
   const fileRef = useRef();
   const handleFile = e => {
     const f = e.target.files[0];
@@ -28,13 +34,26 @@ function Register({ onBack }) {
             <Field label="First Name" required><Input placeholder="Rajesh" /></Field>
             <Field label="Last Name" required><Input placeholder="Gupta" /></Field>
             <Field label="Email Address" required><Input type="email" placeholder="rajesh@company.com" /></Field>
+            <Field label="Password" required>
+              <div className="relative">
+                <Input type={showPass ? "text" : "password"} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label={showPass ? "Hide password" : "Show password"}
+                >
+                  {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Field>
             <Field label="Phone Number"><Input type="tel" placeholder="+91 98765 43210" /></Field>
             <Field label="Role" required>
-              <Select>
-                <option>Procurement Manager</option>
-                <option>Finance Head</option>
-                <option>Operations Director</option>
-                <option>Vendor Manager</option>
+              <Select value={role} onChange={e => setRole(e.target.value)}>
+                <option>Procurement Officer</option>
+                <option>Vendor</option>
+                <option>Manager / Approver</option>
+                <option>Admin</option>
               </Select>
             </Field>
             <Field label="Country" required>

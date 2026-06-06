@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
     phone: String,
-    role: { type: String, enum: ["Procurement Manager", "Finance Head", "Operations Director", "Vendor Manager", "Admin"], default: "Procurement Manager" },
+    role: { type: String, enum: ["Procurement Officer", "Vendor", "Manager / Approver", "Admin"], default: "Procurement Officer" },
     country: String,
     avatar: String,
     isActive: { type: Boolean, default: true },
