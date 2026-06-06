@@ -1,19 +1,23 @@
 import Sidebar from "./Sidebar";
-import Navbar from "./Navbar";
+import TopNav from "./TopNav";
 
-function DashboardLayout({ children }) {
+function DashboardLayout({
+  title,
+  page,
+  setPage,
+  children
+}) {
   return (
-    <div className="flex min-h-screen">
-      <Sidebar />
+    <>
+      <Sidebar
+        active={page}
+        onNav={setPage}
+      />
 
-      <div className="flex-1">
-        <Navbar />
+      <TopNav title={title} />
 
-        <main className="p-6">
-          {children}
-        </main>
-      </div>
-    </div>
+      {children}
+    </>
   );
 }
 
